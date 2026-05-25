@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import OCDAssessment from "./ocd_assessment.jsx";
 
 const LANGUAGES = [
   { name: "English", code: "en-US", label: "English" },
@@ -21,6 +22,9 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [pulseSpeed, setPulseSpeed] = useState("3s");
   const [language, setLanguage] = useState("en-US");
+
+  // App Navigation
+  const [activeTab, setActiveTab] = useState("erp");
 
   // ERP States
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -470,111 +474,141 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Card: ERP Toolbox */}
+        {/* Right Card: Dynamic Toolbox */}
         <div style={styles.card}>
-          <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.5rem", margin: "0 0 1rem", color: "#f1f5f9" }}>
-            ERP Practice Toolbox
-          </h2>
-
-          {/* 1. Compulsion Delay Timer */}
-          <div style={styles.toolSection}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-              <span style={styles.toolTitle}>⏱ COMPULSION DELAY TIMER</span>
-              {timerActive && <span style={styles.badge}>Delay Active</span>}
-            </div>
-            
-            {timerActive ? (
-              <div style={{ textAlign: "center", padding: "1rem" }}>
-                <div style={{ fontSize: "2.5rem", fontWeight: 700, color: "#f59e0b", fontFamily: "'DM Mono', monospace" }}>
-                  {formatTime(timerSeconds)}
-                </div>
-                <p style={{ fontSize: "0.8rem", color: "#94a3b8", margin: "0.25rem 0 0" }}>
-                  Sit with the urge. Let the wave pass.
-                </p>
-                <button 
-                  onClick={() => setTimerActive(false)} 
-                  style={{ ...styles.restartBtn, marginTop: "0.75rem", borderColor: "#f59e0b", color: "#f59e0b" }}
-                >
-                  Pause Timer
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => startERPTimer(1)} style={styles.timerSelectBtn}>1 Min</button>
-                <button onClick={() => startERPTimer(5)} style={styles.timerSelectBtn}>5 Min</button>
-                <button onClick={() => startERPTimer(10)} style={styles.timerSelectBtn}>10 Min</button>
-              </div>
-            )}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+            <button 
+              onClick={() => setActiveTab("erp")}
+              style={{
+                flex: 1, padding: "10px", borderRadius: "10px", border: "none",
+                background: activeTab === "erp" ? "rgba(99, 102, 241, 0.2)" : "rgba(255,255,255,0.05)",
+                color: activeTab === "erp" ? "#a78bfa" : "#94a3b8", cursor: "pointer", fontWeight: 600,
+                border: activeTab === "erp" ? "1px solid rgba(99, 102, 241, 0.4)" : "1px solid transparent",
+                transition: "all 0.2s"
+              }}
+            >
+              ERP Toolbox
+            </button>
+            <button 
+              onClick={() => setActiveTab("assessment")}
+              style={{
+                flex: 1, padding: "10px", borderRadius: "10px", border: "none",
+                background: activeTab === "assessment" ? "rgba(99, 102, 241, 0.2)" : "rgba(255,255,255,0.05)",
+                color: activeTab === "assessment" ? "#a78bfa" : "#94a3b8", cursor: "pointer", fontWeight: 600,
+                border: activeTab === "assessment" ? "1px solid rgba(99, 102, 241, 0.4)" : "1px solid transparent",
+                transition: "all 0.2s"
+              }}
+            >
+              Clinical Assessment
+            </button>
           </div>
 
-          {/* 2. SUDS Distress Level Logger */}
-          <div style={styles.toolSection}>
-            <span style={styles.toolTitle}>📊 DISTRESS TRACKER (SUDS)</span>
-            
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1rem 0" }}>
-              <input 
-                type="range" 
-                min="1" 
-                max="10" 
-                value={sudsLevel} 
-                onChange={(e) => setSudsLevel(Number(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <span style={{ fontSize: "1.2rem", fontWeight: 700, color: "#a78bfa", width: "24px" }}>
-                {sudsLevel}
-              </span>
-            </div>
+          {activeTab === "erp" ? (
+            <>
+              {/* 1. Compulsion Delay Timer */}
+              <div style={styles.toolSection}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                  <span style={styles.toolTitle}>⏱ COMPULSION DELAY TIMER</span>
+                  {timerActive && <span style={styles.badge}>Delay Active</span>}
+                </div>
+                
+                {timerActive ? (
+                  <div style={{ textAlign: "center", padding: "1rem" }}>
+                    <div style={{ fontSize: "2.5rem", fontWeight: 700, color: "#f59e0b", fontFamily: "'DM Mono', monospace" }}>
+                      {formatTime(timerSeconds)}
+                    </div>
+                    <p style={{ fontSize: "0.8rem", color: "#94a3b8", margin: "0.25rem 0 0" }}>
+                      Sit with the urge. Let the wave pass.
+                    </p>
+                    <button 
+                      onClick={() => setTimerActive(false)} 
+                      style={{ ...styles.restartBtn, marginTop: "0.75rem", borderColor: "#f59e0b", color: "#f59e0b" }}
+                    >
+                      Pause Timer
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button onClick={() => startERPTimer(1)} style={styles.timerSelectBtn}>1 Min</button>
+                    <button onClick={() => startERPTimer(5)} style={styles.timerSelectBtn}>5 Min</button>
+                    <button onClick={() => startERPTimer(10)} style={styles.timerSelectBtn}>10 Min</button>
+                  </div>
+                )}
+              </div>
 
-            <button onClick={logDistress} style={styles.actionBtn}>
-              Log Distress Level
-            </button>
-
-            {/* Distress History Mini Graph */}
-            <div style={{ marginTop: "1rem", display: "flex", gap: "8px", alignItems: "flex-end", height: "45px", padding: "4px", background: "rgba(0,0,0,0.2)", borderRadius: "8px" }}>
-              {sudsHistory.map((h, i) => (
-                <div 
-                  key={i} 
-                  style={{
-                    flex: 1,
-                    background: "linear-gradient(to top, #6366f1, #a78bfa)",
-                    height: `${h.level * 10}%`,
-                    borderRadius: "4px 4px 0 0",
-                    position: "relative"
-                  }}
-                  title={`SUDs ${h.level} at ${h.time}`}
-                >
-                  <span style={{ position: "absolute", bottom: "-12px", left: "50%", transform: "translateX(-50%)", fontSize: "0.55rem", color: "#64748b" }}>
-                    {h.time}
+              {/* 2. SUDS Distress Level Logger */}
+              <div style={styles.toolSection}>
+                <span style={styles.toolTitle}>📊 DISTRESS TRACKER (SUDS)</span>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1rem 0" }}>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={sudsLevel} 
+                    onChange={(e) => setSudsLevel(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ fontSize: "1.2rem", fontWeight: 700, color: "#a78bfa", width: "24px" }}>
+                    {sudsLevel}
                   </span>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* 3. Breathing Grounding Circle */}
-          <div style={styles.toolSection}>
-            <span style={styles.toolTitle}>🌀 GROUNDING PACER (4-7-8)</span>
-            
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", marginTop: "1rem" }}>
-              <div 
-                onClick={runBreathingCycle}
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  borderRadius: "50%",
-                  background: "radial-gradient(circle, rgba(167, 139, 250, 0.4) 0%, rgba(99, 102, 241, 0.1) 70%)",
-                  border: "2px solid #a78bfa",
-                  transform: `scale(${breathingCircleScale})`,
-                  transition: "transform 4s ease-in-out",
-                  cursor: "pointer"
-                }}
-              />
-              <p style={{ fontSize: "0.8rem", color: "#cbd5e1", margin: 0, fontWeight: 500 }}>
-                {breathingText}
-              </p>
-            </div>
-          </div>
+                <button onClick={logDistress} style={styles.actionBtn}>
+                  Log Distress Level
+                </button>
 
+                {/* Distress History Mini Graph */}
+                <div style={{ marginTop: "1rem", display: "flex", gap: "8px", alignItems: "flex-end", height: "45px", padding: "4px", background: "rgba(0,0,0,0.2)", borderRadius: "8px" }}>
+                  {sudsHistory.map((h, i) => (
+                    <div 
+                      key={i} 
+                      style={{
+                        flex: 1,
+                        background: "linear-gradient(to top, #6366f1, #a78bfa)",
+                        height: `${h.level * 10}%`,
+                        borderRadius: "4px 4px 0 0",
+                        position: "relative"
+                      }}
+                      title={`SUDs ${h.level} at ${h.time}`}
+                    >
+                      <span style={{ position: "absolute", bottom: "-12px", left: "50%", transform: "translateX(-50%)", fontSize: "0.55rem", color: "#64748b" }}>
+                        {h.time}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Breathing Grounding Circle */}
+              <div style={styles.toolSection}>
+                <span style={styles.toolTitle}>🌀 GROUNDING PACER (4-7-8)</span>
+                
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", marginTop: "1rem" }}>
+                  <div 
+                    onClick={runBreathingCycle}
+                    style={{
+                      width: "50px",
+                      height: "50px",
+                      borderRadius: "50%",
+                      background: "radial-gradient(circle, rgba(167, 139, 250, 0.4) 0%, rgba(99, 102, 241, 0.1) 70%)",
+                      border: "2px solid #a78bfa",
+                      transform: `scale(${breathingCircleScale})`,
+                      transition: "transform 4s ease-in-out",
+                      cursor: "pointer"
+                    }}
+                  />
+                  <p style={{ fontSize: "0.8rem", color: "#cbd5e1", margin: 0, fontWeight: 500 }}>
+                    {breathingText}
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ maxHeight: "700px", overflowY: "auto", borderRadius: "12px", background: "#fff", boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }}>
+              <OCDAssessment />
+            </div>
+          )}
         </div>
 
       </div>
