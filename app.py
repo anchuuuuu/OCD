@@ -49,6 +49,54 @@ gemini_key = os.environ.get("GEMINI_API_KEY")
 anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
 groq_key = get_groq_key()
 
+# Pinecone client lazy load
+pc_client = None
+embedding_model = None
+
+def get_pinecone_context(query_text: str, top_k: int = 2) -> str:
+    global pc_client, embedding_model
+    api_key = os.environ.get("PINECONE_API_KEY")
+    index_name = os.environ.get("PINECONE_INDEX_NAME", "pdf-search-index")
+    
+    if not api_key:
+        return ""
+        
+    try:
+        from pinecone import Pinecone
+        from sentence_transformers import SentenceTransformer
+        
+        if pc_client is None:
+            pc_client = Pinecone(api_key=api_key)
+            
+        active_indexes = [idx.name for idx in pc_client.list_indexes()]
+        if index_name not in active_indexes:
+            return ""
+            
+        if embedding_model is None:
+            embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            
+        index = pc_client.Index(index_name)
+        query_vector = embedding_model.encode(query_text).tolist()
+        
+        results = index.query(
+            vector=query_vector,
+            top_k=top_k,
+            include_metadata=True
+        )
+        
+        contexts = []
+        for match in results.get("matches", []):
+            text = match.get("metadata", {}).get("text", "")
+            if text:
+                contexts.append(text.strip())
+                
+        if contexts:
+            return "\n---\nClinical Context from Reference PDF:\n" + "\n".join(contexts)
+    except Exception as e:
+        print("Pinecone context retrieval error:", e)
+        
+    return ""
+
 # Helper generation functions
 def call_gemini(history):
     contents = []
@@ -139,6 +187,7 @@ You talk directly to the patient using compassionate, supportive, and clinical d
 Always respond in the SAME language the user is speaking in (e.g. if they speak in Hindi, respond in Hindi; if Spanish, respond in Spanish).
 Keep your replies brief and conversational (under 3 sentences, around 45-60 words) because they will be read aloud.
 Do not use lists, bullet points, or markdown.
+Use the provided 'Clinical Context' from reference PDFs to guide your response if relevant, but do not cite pages or read technical references directly.
 
 Clinical Framework (Y-BOCS & ERP):
 Your coaching is based on the Gold-Standard Y-BOCS (Yale-Brown Obsessive Compulsive Scale) and clinical ERP.
@@ -181,7 +230,17 @@ def chat(req: ChatRequest):
         
     sess = sessions[req.session_id]
     history = sess["history"]
+    
+    # 1. Fetch matching context from Pinecone using user's latest query message
+    context_str = get_pinecone_context(req.message)
+    
+    # Append the original message to the session history so the history remains clean and normal
     history.append({"role": "user", "content": req.message})
+    
+    # Create a temporary copy of history where the last user message has context appended, to pass to LLM APIs
+    api_history = list(history)
+    if context_str and len(api_history) > 0 and api_history[-1]["role"] == "user":
+        api_history[-1] = {"role": "user", "content": f"{req.message}\n{context_str}"}
     
     reply = ""
     errors = []
@@ -189,7 +248,7 @@ def chat(req: ChatRequest):
     # 1. Try Gemini
     if gemini_key and not reply:
         try:
-            reply = call_gemini(history)
+            reply = call_gemini(api_history)
         except Exception as e:
             print("Gemini API Error, trying Groq fallback:", e)
             errors.append(f"Gemini: {e}")
@@ -197,7 +256,7 @@ def chat(req: ChatRequest):
     # 2. Try Groq fallback
     if groq_key and not reply:
         try:
-            reply = call_groq(history)
+            reply = call_groq(api_history)
         except Exception as e:
             print("Groq API Error, trying Anthropic fallback:", e)
             errors.append(f"Groq: {e}")
@@ -205,7 +264,7 @@ def chat(req: ChatRequest):
     # 3. Try Anthropic fallback
     if anthropic_key and not reply:
         try:
-            reply = call_anthropic(history)
+            reply = call_anthropic(api_history)
         except Exception as e:
             print("Anthropic API Error:", e)
             errors.append(f"Anthropic: {e}")
