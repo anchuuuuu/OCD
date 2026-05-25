@@ -782,6 +782,9 @@ def build_result(state: dict) -> dict:
 
 # ─── Request / Response Models ────────────────────────────────────────────────
 
+class SupportChatRequest(BaseModel):
+    messages: List[Dict[str, str]]
+
 class NewSessionRequest(BaseModel):
     user_id: str
 
@@ -972,6 +975,48 @@ def reset_session(session_id: str):
     }
 
     return {"session_id": session_id, "bot_message": bot_msg, "state": new_state}
+
+
+@app.post("/api/support-chat")
+def support_chat(req: SupportChatRequest):
+    """Calm AI Support Companion Chat Endpoint"""
+    system_prompt = """You are Calm, a warm and friendly OCD support companion. You talk like a caring, understanding friend — NOT like a robot or therapist. Use simple, everyday English. Short sentences. No jargon unless you explain it simply.
+
+Your key goals:
+1. Make the person feel heard and not alone in 1-2 sentences
+2. Help them see what's happening (OCD is making their brain "loop")
+3. Give them ONE simple thing to try RIGHT NOW
+4. End with a clear, hopeful closing line — something like "You've got this" or "This feeling will pass — it always does"
+
+RULES:
+- Never go on and on. Keep replies SHORT (under 150 words total)
+- Never use bullet points or numbered lists — write naturally like a friend texting
+- Never use words like: "I understand your concern", "It's important to note", "intrusive ideation", "cognitive behavioral", "rumination cycle"
+- Instead say things like: "That sounds really hard", "Your brain is just stuck in a loop right now", "Try this one small thing"
+- Always end with one clear encouraging sentence that gives them a stopping point
+- If they say they did something or feel better, celebrate it warmly and wrap up — don't keep going
+- If they seem in crisis or mention self-harm, gently suggest calling a helpline (iCall India: 9152987821) and say you care about them
+
+Format: plain conversational text only. No markdown. No lists. If you want to suggest a breathing exercise or grounding step, just describe it in 1-2 simple sentences inline."""
+
+    # Map role format from React (user/assistant) to standard roles
+    chat_messages = []
+    for msg in req.messages:
+        role = "user" if msg["role"] == "user" else "assistant"
+        chat_messages.append({"role": role, "content": msg["content"]})
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            system=system_prompt,
+            messages=chat_messages,
+        )
+        reply = response.content[0].text.strip()
+        return {"reply": reply}
+    except Exception as e:
+        # Fallback response in case model call fails
+        return {"reply": "I'm right here with you. Take a slow breath — in for 4, out for 6. We can take this one step at a time."}
 
 
 # ─── Progress Calculator ───────────────────────────────────────────────────────

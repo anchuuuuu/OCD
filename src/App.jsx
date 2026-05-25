@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import OCDAssessment from "./ocd_assessment";
 import OCDVoiceAssessment from "./ocd_voice_assessment";
+import OCDAssistant from "./ocd_assistant";
 
 function App() {
   const [mode, setMode] = useState("menu");
@@ -36,6 +37,22 @@ function App() {
 
   if (mode === "voice") {
     return <OCDVoiceAssessment onBack={() => setMode("menu")} />;
+  }
+
+  if (mode === "assistant") {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: "#080d18",
+        backgroundImage: "radial-gradient(ellipse 80% 60% at 20% 10%, rgba(55,65,140,0.12) 0%, transparent 70%), radial-gradient(ellipse 60% 50% at 80% 90%, rgba(100,60,150,0.08) 0%, transparent 70%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem 1rem"
+      }}>
+        <OCDAssistant onBack={() => setMode("menu")} />
+      </div>
+    );
   }
 
   return (
@@ -139,6 +156,36 @@ function App() {
             </div>
             <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8", lineHeight: 1.5 }}>
               Talk naturally with our compassionate conversational assistant. Uses local speech recognition &amp; AI reasoning.
+            </p>
+          </div>
+
+          {/* Card 3: Calm AI Text Companion */}
+          <div 
+            onClick={() => setMode("assistant")}
+            style={{
+              background: "rgba(20,30,50,0.5)", border: "1px solid rgba(99,120,180,0.15)",
+              borderRadius: "16px", padding: "1.5rem", cursor: "pointer",
+              textAlign: "left", transition: "all 0.2s ease-in-out"
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.background = "rgba(80,100,200,0.1)";
+              e.currentTarget.style.borderColor = "rgba(99,102,241,0.4)";
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.background = "rgba(20,30,50,0.5)";
+              e.currentTarget.style.borderColor = "rgba(99,120,180,0.15)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.2rem", color: "#34d399", margin: 0 }}>
+                Calm: AI Support Companion
+              </h3>
+              <span style={{ fontSize: "1.2rem" }}>💬</span>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8", lineHeight: 1.5 }}>
+              Chat with Calm, a friendly text-based AI companion designed to help you ground yourself when thoughts start looping.
             </p>
           </div>
 
