@@ -17,7 +17,6 @@ export default function App() {
   const [status, setStatus] = useState("Initializing...");
   const [doctorResponse, setDoctorResponse] = useState("");
   const [userSpeech, setUserSpeech] = useState("");
-  const [inputText, setInputText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [pulseSpeed, setPulseSpeed] = useState("3s");
@@ -242,14 +241,6 @@ export default function App() {
     }
   };
 
-  const handleTextSubmit = (e) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
-    setUserSpeech(inputText);
-    handleUserSpeech(inputText);
-    setInputText("");
-  };
-
   // ERP Actions
   const startERPTimer = (mins) => {
     setTimerSeconds(mins * 60);
@@ -449,21 +440,6 @@ export default function App() {
               </div>
             )}
           </div>
-
-          {/* Text Fallback Input */}
-          <form onSubmit={handleTextSubmit} style={styles.fallbackForm}>
-            <input
-              id="text-input"
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Type message instead of speaking..."
-              style={styles.fallbackInput}
-            />
-            <button type="submit" style={styles.fallbackSubmit}>
-              Send
-            </button>
-          </form>
 
           {/* Controls */}
           <div style={styles.controls}>
@@ -779,31 +755,6 @@ const styles = {
     lineHeight: 1.5,
     fontFamily: "'Playfair Display', serif"
   },
-  fallbackForm: {
-    display: "flex",
-    gap: "8px",
-    width: "100%"
-  },
-  fallbackInput: {
-    flex: 1,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "12px",
-    padding: "10px 14px",
-    fontSize: "0.85rem",
-    color: "#cbd5e1",
-    outline: "none"
-  },
-  fallbackSubmit: {
-    background: "rgba(99,102,241,0.15)",
-    border: "1px solid rgba(99,102,241,0.3)",
-    borderRadius: "12px",
-    padding: "0 18px",
-    color: "#a78bfa",
-    fontSize: "0.85rem",
-    fontWeight: "600",
-    cursor: "pointer"
-  },
   controls: {
     display: "flex",
     justifyContent: "center"
@@ -879,3 +830,13 @@ if (typeof document !== "undefined") {
   `;
   document.head.appendChild(styleSheet);
 }
+
+function HeartIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
