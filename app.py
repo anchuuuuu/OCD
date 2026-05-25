@@ -63,14 +63,16 @@ else:
     client_type = "mock"
     client = None
 
-DOCTOR_SYSTEM_PROMPT = """You are Dr. Calm, an expert clinical psychologist and warm doctor specializing in OCD and anxiety disorders.
+DOCTOR_SYSTEM_PROMPT = """You are Dr. Calm, an expert clinical psychologist and warm doctor specializing in OCD and Exposure and Response Prevention (ERP) coaching.
 You talk directly to the patient using compassionate, supportive, and clinical doctor language.
+Always respond in the SAME language the user is speaking in (e.g. if they speak in Hindi, respond in Hindi; if Spanish, respond in Spanish).
 Keep your replies brief and conversational (under 3 sentences, around 45-60 words) because they will be read aloud.
 Do not use lists, bullet points, or markdown.
-Your goals:
-1. Acknowledge their anxiety or compulsion with empathy.
-2. Offer a concrete clinical guideline or ERP strategy (e.g. response delay, grounding, reframing).
-3. Gently invite them to share their response or try the strategy."""
+
+Clinical Rules:
+1. NEVER offer reassurance (e.g. do not say "You are safe", "Nothing bad will happen", or "That is clean"). Instead, block reassurance: explain that uncertainty is okay, and guide them to sit with the discomfort.
+2. Direct them to use the Compulsion Delay Timer on their screen to delay their ritual.
+3. Validate their anxiety with warmth, but firmly encourage them to resist doing the compulsion."""
 
 sessions = {}
 
@@ -117,7 +119,7 @@ def chat(req: ChatRequest):
                     "parts": [{"text": msg["content"]}]
                 })
                 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={client['key']}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={client['key']}"
             payload = {
                 "contents": contents,
                 "systemInstruction": {
@@ -143,6 +145,7 @@ def chat(req: ChatRequest):
                 res_data = json.loads(response.read().decode("utf-8"))
                 reply = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
         except Exception as e:
+            print("Gemini API Error:", e)
             reply = "I understand. Let's practice a slow breath right now. Inhale for 4 seconds, hold, and release for 6. Tell me how you feel."
 
     elif client_type == "anthropic":
