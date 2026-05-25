@@ -6,6 +6,7 @@ export default function App() {
   const [status, setStatus] = useState("Initializing...");
   const [doctorResponse, setDoctorResponse] = useState("");
   const [userSpeech, setUserSpeech] = useState("");
+  const [inputText, setInputText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [pulseSpeed, setPulseSpeed] = useState("3s");
@@ -188,6 +189,14 @@ export default function App() {
     }
   };
 
+  const handleTextSubmit = (e) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
+    setUserSpeech(inputText);
+    handleUserSpeech(inputText);
+    setInputText("");
+  };
+
   // ─── Welcome Overlay Screen ────────────────────────────────────────────────
   if (!hasStarted) {
     return (
@@ -301,6 +310,21 @@ export default function App() {
           )}
         </div>
 
+        {/* Text Fallback Input for Quiet Environments */}
+        <form onSubmit={handleTextSubmit} style={styles.fallbackForm}>
+          <input
+            id="text-input"
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Type message instead of speaking..."
+            style={styles.fallbackInput}
+          />
+          <button type="submit" style={styles.fallbackSubmit}>
+            Send
+          </button>
+        </form>
+
         {/* Controls */}
         <div style={styles.controls}>
           <button 
@@ -353,7 +377,7 @@ const styles = {
     boxShadow: "0 25px 70px rgba(0, 0, 0, 0.8)",
     display: "flex",
     flexDirection: "column",
-    gap: "1.5rem"
+    gap: "1.25rem"
   },
   avatarLarge: {
     width: "72px",
@@ -407,7 +431,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    padding: "1.5rem 0",
+    padding: "1rem 0",
     textAlign: "center"
   },
   pulseSphere: {
@@ -419,7 +443,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: "1.5rem",
+    marginBottom: "1.25rem",
     animation: "spherePulse infinite ease-in-out",
     transition: "all 0.3s ease"
   },
@@ -449,7 +473,7 @@ const styles = {
     border: "1px solid rgba(255, 255, 255, 0.04)",
     borderRadius: "16px",
     padding: "1.25rem",
-    minHeight: "120px",
+    minHeight: "100px",
     display: "flex",
     flexDirection: "column",
     gap: "1rem",
@@ -490,6 +514,33 @@ const styles = {
     margin: 0,
     lineHeight: 1.5,
     fontFamily: "'Playfair Display', serif"
+  },
+  fallbackForm: {
+    display: "flex",
+    gap: "8px",
+    width: "100%"
+  },
+  fallbackInput: {
+    flex: 1,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "12px",
+    padding: "10px 14px",
+    fontSize: "0.85rem",
+    color: "#cbd5e1",
+    outline: "none",
+    transition: "border-color 0.2s"
+  },
+  fallbackSubmit: {
+    background: "rgba(99,102,241,0.15)",
+    border: "1px solid rgba(99,102,241,0.3)",
+    borderRadius: "12px",
+    padding: "0 18px",
+    color: "#a78bfa",
+    fontSize: "0.85rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.2s"
   },
   controls: {
     display: "flex",
