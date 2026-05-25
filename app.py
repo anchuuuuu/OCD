@@ -45,10 +45,14 @@ def get_groq_key():
     return None
 
 # Resolve AI client
+gemini_key = os.environ.get("GEMINI_API_KEY")
 anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
 groq_key = get_groq_key()
 
-if anthropic_key:
+if gemini_key:
+    client_type = "gemini"
+    client = {"key": gemini_key}
+elif anthropic_key:
     from anthropic import Anthropic
     client_type = "anthropic"
     client = Anthropic(api_key=anthropic_key)
@@ -102,7 +106,46 @@ def chat(req: ChatRequest):
     
     reply = ""
     
-    if client_type == "anthropic":
+    if client_type == "gemini":
+        try:
+            # Map history roles to user/model for Gemini
+            contents = []
+            for msg in history:
+                role = "user" if msg["role"] == "user" else "model"
+                contents.append({
+                    "role": role,
+                    "parts": [{"text": msg["content"]}]
+                })
+                
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={client['key']}"
+            payload = {
+                "contents": contents,
+                "systemInstruction": {
+                    "parts": [{"text": DOCTOR_SYSTEM_PROMPT}]
+                },
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "maxOutputTokens": 200
+                }
+            }
+            
+            req_data = json.dumps(payload).encode("utf-8")
+            headers = {"Content-Type": "application/json"}
+            
+            request = urllib.request.Request(
+                url,
+                data=req_data,
+                headers=headers,
+                method="POST"
+            )
+            
+            with urllib.request.urlopen(request, timeout=10) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                reply = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except Exception as e:
+            reply = "I understand. Let's practice a slow breath right now. Inhale for 4 seconds, hold, and release for 6. Tell me how you feel."
+
+    elif client_type == "anthropic":
         try:
             chat_messages = []
             for msg in history:
