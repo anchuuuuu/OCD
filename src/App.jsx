@@ -49,6 +49,11 @@ export default function App() {
     return () => document.head.removeChild(link);
   }, []);
 
+  const handleUserSpeechRef = useRef();
+  useEffect(() => {
+    handleUserSpeechRef.current = handleUserSpeech;
+  });
+
   // Set up Speech Recognition whenever language changes
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -70,7 +75,9 @@ export default function App() {
       rec.onresult = (event) => {
         const text = event.results[0][0].transcript;
         setUserSpeech(text);
-        handleUserSpeech(text);
+        if (handleUserSpeechRef.current) {
+          handleUserSpeechRef.current(text);
+        }
       };
 
       rec.onerror = (e) => {
@@ -145,6 +152,12 @@ export default function App() {
 
   const speak = (text) => {
     stopSpeaking();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+    }
+
     if (isMuted || !synthRef.current) {
       setStatus("Listening... Tap mic when ready.");
       return;
