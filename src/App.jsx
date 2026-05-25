@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 export default function App() {
+  const [hasStarted, setHasStarted] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [status, setStatus] = useState("Initializing...");
   const [doctorResponse, setDoctorResponse] = useState("");
@@ -35,7 +36,7 @@ export default function App() {
       rec.onstart = () => {
         setIsListening(true);
         setStatus("Listening to you...");
-        setPulseSpeed("1.5s");
+        setPulseSpeed("1.2s");
       };
 
       rec.onresult = (event) => {
@@ -57,6 +58,7 @@ export default function App() {
 
       rec.onend = () => {
         setIsListening(false);
+        setPulseSpeed("3s");
       };
 
       recognitionRef.current = rec;
@@ -64,14 +66,6 @@ export default function App() {
       setStatus("Voice recognition not supported in this browser.");
     }
   }, [sessionId]);
-
-  // Start a new doctor session on load
-  useEffect(() => {
-    startNewSession();
-    return () => {
-      stopSpeaking();
-    };
-  }, []);
 
   const startNewSession = async () => {
     stopSpeaking();
@@ -105,7 +99,7 @@ export default function App() {
     
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Pick a warm, empathetic voice
+    // Select warm US english voice if available
     const voices = synthRef.current.getVoices();
     const premiumVoice = voices.find(
       (v) =>
@@ -152,6 +146,16 @@ export default function App() {
     }
   };
 
+  const handleSphereClick = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    } else {
+      startListening();
+    }
+  };
+
   const handleUserSpeech = async (text) => {
     setStatus("Doctor is thinking...");
     setPulseSpeed("0.5s");
@@ -184,6 +188,51 @@ export default function App() {
     }
   };
 
+  // ─── Welcome Overlay Screen ────────────────────────────────────────────────
+  if (!hasStarted) {
+    return (
+      <div style={styles.container}>
+        <div style={{ ...styles.card, textAlign: "center", alignItems: "center", gap: "1.5rem" }}>
+          <div style={styles.avatarLarge}>
+            <HeartIcon size={36} />
+          </div>
+          <div>
+            <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "2.2rem", fontWeight: 700, margin: "0 0 0.5rem", color: "#f1f5f9" }}>
+              Dr. Calm
+            </h1>
+            <p style={styles.subtitle}>CLINICAL OCD ASSISTANT</p>
+          </div>
+          
+          <p style={{ fontSize: "0.9rem", color: "#94a3b8", lineHeight: 1.6, margin: "0.5rem 0 1.5rem" }}>
+            Start a 2-way clinical voice session. Dr. Calm will greet you and guide you through managing thoughts and compulsions.
+          </p>
+
+          <button 
+            onClick={() => {
+              setHasStarted(true);
+              startNewSession();
+            }}
+            style={{
+              ...styles.controlBtn,
+              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              color: "#fff",
+              border: "none",
+              padding: "14px 40px",
+              fontSize: "1rem",
+              fontWeight: "600",
+              borderRadius: "16px",
+              boxShadow: "0 10px 25px rgba(99, 102, 241, 0.4)",
+              cursor: "pointer"
+            }}
+          >
+            Start Conversation
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Active Dashboard ──────────────────────────────────────────────────────
   return (
     <div style={styles.container}>
       <div style={styles.card}>
@@ -201,11 +250,11 @@ export default function App() {
         {/* Central Visualizer Area */}
         <div style={styles.visualizerContainer}>
           <div 
-            onClick={startListening}
+            onClick={handleSphereClick}
             style={{
               ...styles.pulseSphere,
               animationDuration: pulseSpeed,
-              cursor: isListening ? "default" : "pointer",
+              cursor: "pointer",
               boxShadow: isListening 
                 ? "0 0 80px rgba(59, 130, 246, 0.4)" 
                 : (status.includes("Speaking") ? "0 0 80px rgba(16, 185, 129, 0.3)" : "0 0 40px rgba(99, 102, 241, 0.15)")
@@ -271,6 +320,16 @@ export default function App() {
   );
 }
 
+// Icon
+function HeartIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
 const styles = {
   container: {
     minHeight: "100vh",
@@ -289,12 +348,23 @@ const styles = {
     background: "rgba(10, 15, 30, 0.85)",
     border: "1px solid rgba(99, 102, 241, 0.2)",
     borderRadius: "28px",
-    padding: "2rem",
+    padding: "2.5rem 2rem",
     backdropFilter: "blur(20px)",
     boxShadow: "0 25px 70px rgba(0, 0, 0, 0.8)",
     display: "flex",
     flexDirection: "column",
     gap: "1.5rem"
+  },
+  avatarLarge: {
+    width: "72px",
+    height: "72px",
+    borderRadius: "50%",
+    background: "rgba(99, 102, 241, 0.12)",
+    color: "#818cf8",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "0.5rem"
   },
   header: {
     display: "flex",
@@ -337,7 +407,7 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    padding: "2rem 0",
+    padding: "1.5rem 0",
     textAlign: "center"
   },
   pulseSphere: {
@@ -426,8 +496,8 @@ const styles = {
     justifyContent: "center"
   },
   controlBtn: {
-    border: "1px solid",
-    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "16px",
     padding: "10px 24px",
     fontSize: "0.85rem",
     fontWeight: 500,
