@@ -4,7 +4,8 @@ import json
 import urllib.request
 from typing import List, Dict, Optional
 from datetime import datetime
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, Response
+import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -185,9 +186,10 @@ def call_anthropic(history):
 DOCTOR_SYSTEM_PROMPT = """You are Dr. Calm, an expert clinical psychologist and warm doctor specializing in OCD and Exposure and Response Prevention (ERP) coaching.
 You talk directly to the patient using compassionate, supportive, and clinical doctor language.
 Always respond in the SAME language the user is speaking in (e.g. if they speak in Hindi, respond in Hindi; if Spanish, respond in Spanish).
-Keep your replies brief and conversational (under 3 sentences, around 45-60 words) because they will be read aloud.
+Keep your replies brief and conversational (under 2 sentences, around 30-40 words) because they will be read aloud.
+USE VERY SIMPLE WORDS. Speak at a 5th-grade reading level. Ensure your answers are incredibly easy to understand.
 Do not use lists, bullet points, or markdown.
-Use the provided 'Clinical Context' from reference PDFs to guide your response if relevant, but do not cite pages or read technical references directly.
+Use the provided 'Clinical Context' from reference PDFs to guide your response if relevant, but simplify all technical concepts. Do not cite pages.
 
 Clinical Framework (Y-BOCS & ERP):
 Your coaching is based on the Gold-Standard Y-BOCS (Yale-Brown Obsessive Compulsive Scale) and clinical ERP.
@@ -245,21 +247,21 @@ def chat(req: ChatRequest):
     reply = ""
     errors = []
     
-    # 1. Try Gemini
-    if gemini_key and not reply:
-        try:
-            reply = call_gemini(api_history)
-        except Exception as e:
-            print("Gemini API Error, trying Groq fallback:", e)
-            errors.append(f"Gemini: {e}")
-            
-    # 2. Try Groq fallback
+    # 1. Try Groq (Llama 3 for ultra-low latency)
     if groq_key and not reply:
         try:
             reply = call_groq(api_history)
         except Exception as e:
-            print("Groq API Error, trying Anthropic fallback:", e)
+            print("Groq API Error, trying Gemini fallback:", e)
             errors.append(f"Groq: {e}")
+            
+    # 2. Try Gemini fallback
+    if gemini_key and not reply:
+        try:
+            reply = call_gemini(api_history)
+        except Exception as e:
+            print("Gemini API Error, trying Anthropic fallback:", e)
+            errors.append(f"Gemini: {e}")
             
     # 3. Try Anthropic fallback
     if anthropic_key and not reply:
@@ -288,3 +290,49 @@ def root():
         "service": "Dr. Calm Voice Doctor API",
         "configured_providers": providers
     }
+
+@app.post("/api/stt")
+async def stt(file: UploadFile = File(...)):
+    deepgram_key = os.environ.get("DEEPGRAM_API_KEY")
+    if not deepgram_key:
+        raise HTTPException(status_code=500, detail="Deepgram API key not found")
+    
+    audio_data = await file.read()
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            "https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true",
+            headers={"Authorization": f"Token {deepgram_key}"},
+            content=audio_data,
+            timeout=30.0
+        )
+        if res.status_code != 200:
+            raise HTTPException(status_code=res.status_code, detail=res.text)
+            
+        data = res.json()
+        try:
+            transcript = data["results"]["channels"][0]["alternatives"][0]["transcript"]
+            return {"text": transcript}
+        except KeyError:
+            return {"text": ""}
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: Optional[str] = "aura-asteria-en"
+
+@app.post("/api/tts")
+async def tts(req: TTSRequest):
+    deepgram_key = os.environ.get("DEEPGRAM_API_KEY")
+    if not deepgram_key:
+        raise HTTPException(status_code=500, detail="Deepgram API key not found")
+        
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"https://api.deepgram.com/v1/speak?model={req.voice}",
+            headers={"Authorization": f"Token {deepgram_key}", "Content-Type": "application/json"},
+            json={"text": req.text},
+            timeout=10.0
+        )
+        if res.status_code != 200:
+            raise HTTPException(status_code=res.status_code, detail=res.text)
+            
+        return Response(content=res.content, media_type="audio/mp3")

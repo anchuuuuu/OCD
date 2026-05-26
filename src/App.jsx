@@ -1,17 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import OCDAssessment from "./ocd_assessment.jsx";
 
-const LANGUAGES = [
-  { name: "English", code: "en-US", label: "English" },
-  { name: "Hindi", code: "hi-IN", label: "हिंदी (Hindi)" },
-  { name: "Spanish", code: "es-ES", label: "Español (Spanish)" },
-  { name: "Tamil", code: "ta-IN", label: "தமிழ் (Tamil)" },
-  { name: "Telugu", code: "te-IN", label: "తెలుగు (Telugu)" },
-  { name: "Kannada", code: "kn-IN", label: "ಕನ್ನಡ (Kannada)" },
-  { name: "Arabic", code: "ar-AE", label: "العربية (Arabic)" },
-  { name: "French", code: "fr-FR", label: "Français (French)" }
-];
-
 export default function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [sessionId, setSessionId] = useState("");
@@ -21,7 +10,6 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [pulseSpeed, setPulseSpeed] = useState("3s");
-  const [language, setLanguage] = useState("en-US");
 
   // App Navigation
   const [activeTab, setActiveTab] = useState("erp");
@@ -37,9 +25,15 @@ export default function App() {
   const [breathingText, setBreathingText] = useState("Tap to start breathing exercise");
   const [breathingCircleScale, setBreathingCircleScale] = useState(1);
 
-  const recognitionRef = useRef(null);
-  const synthRef = useRef(window.speechSynthesis);
-  const currentUtteranceRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const isRecordingRef = useRef(false);
+  const isPlayingAudioRef = useRef(false);
+  const silenceTimerRef = useRef(null);
+  const currentAudioObjRef = useRef(null);
   const activeSessionRef = useRef("");
   const timerRef = useRef(null);
   const breathingIntervalRef = useRef(null);
@@ -58,53 +52,125 @@ export default function App() {
     handleUserSpeechRef.current = handleUserSpeech;
   });
 
-  // Set up Speech Recognition whenever language changes
+  // Initialize Microphone and VAD Loop
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
+    const initMic = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContextRef.current = new AudioContext();
+        const source = audioContextRef.current.createMediaStreamSource(stream);
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 512;
+        source.connect(analyserRef.current);
+        
+        monitorAudio();
+      } catch (err) {
+        console.error("Mic access denied", err);
+        setStatus("Microphone access denied. Please allow mic.");
       }
-      const rec = new SpeechRecognition();
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = language;
+    };
+    initMic();
 
-      rec.onstart = () => {
-        setIsListening(true);
-        setStatus("Listening to you...");
-        setPulseSpeed("1.2s");
-      };
+    return () => {
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (audioContextRef.current) audioContextRef.current.close();
+    };
+  }, []);
 
-      rec.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        setUserSpeech(text);
-        if (handleUserSpeechRef.current) {
-          handleUserSpeechRef.current(text);
-        }
-      };
-
-      rec.onerror = (e) => {
-        console.error("Speech recognition error:", e.error);
-        if (e.error === "no-speech") {
-          setStatus("Doctor is waiting... Tap mic to speak.");
-        } else {
-          setStatus("Microphone error. Tap mic to retry.");
-        }
-        setIsListening(false);
-        setPulseSpeed("3s");
-      };
-
-      rec.onend = () => {
-        setIsListening(false);
-        setPulseSpeed("3s");
-      };
-
-      recognitionRef.current = rec;
-    } else {
-      setStatus("Voice recognition not supported in this browser.");
+  const monitorAudio = () => {
+    if (!analyserRef.current) return;
+    requestAnimationFrame(monitorAudio);
+    
+    // Ignore mic if AI is speaking or muted
+    if (isPlayingAudioRef.current || isMuted) {
+      setPulseSpeed("3s");
+      return;
     }
-  }, [language, sessionId]);
+
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+    
+    // Voice activity threshold
+    if (average > 15) {
+      if (!isRecordingRef.current) {
+        startRecording();
+      }
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+      setPulseSpeed("0.5s"); // fast pulse when user is talking
+    } else {
+      if (isRecordingRef.current) {
+        if (!silenceTimerRef.current) {
+          silenceTimerRef.current = setTimeout(() => {
+            stopRecording();
+            silenceTimerRef.current = null;
+          }, 1500); // 1.5s of silence triggers the end of speech
+        }
+      } else {
+        setPulseSpeed("1.5s");
+      }
+    }
+  };
+
+  const startRecording = () => {
+    if (!streamRef.current) return;
+    setIsListening(true);
+    isRecordingRef.current = true;
+    setStatus("Listening...");
+    audioChunksRef.current = [];
+    
+    // Use webm or mp4 depending on browser support (iOS Safari)
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+    mediaRecorderRef.current = new MediaRecorder(streamRef.current, { mimeType });
+    
+    mediaRecorderRef.current.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+    
+    mediaRecorderRef.current.onstop = processAudio;
+    mediaRecorderRef.current.start();
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      isRecordingRef.current = false;
+      setIsListening(false);
+    }
+  };
+
+  const processAudio = async () => {
+    if (audioChunksRef.current.length === 0) return;
+    const audioBlob = new Blob(audioChunksRef.current);
+    audioChunksRef.current = [];
+    
+    setStatus("Transcribing (Deepgram)...");
+    try {
+      const formData = new FormData();
+      formData.append("file", audioBlob, "audio.webm");
+      
+      const res = await fetch("/api/stt", {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      
+      if (data.text && data.text.trim().length > 0) {
+        setUserSpeech(data.text);
+        if (handleUserSpeechRef.current) {
+          handleUserSpeechRef.current(data.text);
+        }
+      } else {
+        setStatus("Waiting for you to speak...");
+      }
+    } catch (e) {
+      console.error("STT Error:", e);
+      setStatus("Transcription failed.");
+    }
+  };
 
   // ERP Timer Countdown Effect
   useEffect(() => {
@@ -129,20 +195,17 @@ export default function App() {
     setPulseSpeed("3s");
 
     try {
-      const selectedLangObj = LANGUAGES.find(l => l.code === language);
       const res = await fetch("/api/session/new", { method: "POST" });
       const data = await res.json();
       setSessionId(data.session_id);
       activeSessionRef.current = data.session_id;
 
-      // Ask first question based on selected language
-      const langName = selectedLangObj ? selectedLangObj.name : "English";
       const initialGreetingReq = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: data.session_id,
-          message: `Hello Dr. Calm. Please greet me and ask about my OCD thoughts in ${langName}.`
+          message: `Hello Dr. Calm. Please greet me and ask about my OCD thoughts.`
         })
       });
       const greetData = await initialGreetingReq.json();
@@ -154,73 +217,63 @@ export default function App() {
     }
   };
 
-  const speak = (text) => {
+  const speak = async (text) => {
     stopSpeaking();
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch (e) {}
-    }
-
-    if (isMuted || !synthRef.current) {
-      setStatus("Listening... Tap mic when ready.");
+    if (isMuted) {
+      setStatus("Listening...");
       return;
     }
 
-    setStatus("Speaking...");
-    setPulseSpeed("0.8s");
+    setStatus("Generating Voice (Deepgram)...");
+    isPlayingAudioRef.current = true;
     
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language;
-    
-    // Select warm voice matching language if available
-    const voices = synthRef.current.getVoices();
-    const premiumVoice = voices.find(
-      (v) => v.lang.startsWith(language.substring(0, 2))
-    );
-    if (premiumVoice) utterance.voice = premiumVoice;
-    
-    utterance.rate = 0.95;
-    utterance.pitch = 1.05;
-
-    utterance.onend = () => {
-      setStatus("Listening...");
-      setPulseSpeed("1.5s");
-      startListening();
-    };
-
-    utterance.onerror = (e) => {
-      console.error("Speech synthesis error:", e);
-      setStatus("Listening... Tap mic when ready.");
-      setPulseSpeed("3s");
-    };
-
-    currentUtteranceRef.current = utterance;
-    synthRef.current.speak(utterance);
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text })
+      });
+      
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      currentAudioObjRef.current = audio;
+      
+      audio.onplay = () => {
+        setStatus("Speaking...");
+        setPulseSpeed("0.8s");
+      };
+      
+      audio.onended = () => {
+        isPlayingAudioRef.current = false;
+        setStatus("Listening...");
+        setPulseSpeed("1.5s");
+      };
+      
+      await audio.play();
+    } catch (e) {
+      console.error("TTS Error:", e);
+      isPlayingAudioRef.current = false;
+      setStatus("Voice error. Waiting...");
+    }
   };
 
   const stopSpeaking = () => {
-    if (synthRef.current) {
-      synthRef.current.cancel();
+    if (currentAudioObjRef.current) {
+      currentAudioObjRef.current.pause();
+      currentAudioObjRef.current = null;
     }
+    isPlayingAudioRef.current = false;
   };
 
   const startListening = () => {
+    // VAD handles starting automatically now!
     stopSpeaking();
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-      } catch (e) {
-        // Recognition might already be running
-      }
-    }
   };
 
   const handleSphereClick = () => {
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+    if (isRecordingRef.current) {
+      stopRecording();
     } else {
       startListening();
     }
@@ -270,9 +323,7 @@ export default function App() {
     setSudsHistory(prev => [...prev, { time: timeStr, level: sudsLevel }]);
     
     // Have the doctor respond dynamically to the new distress report
-    const selectedLangObj = LANGUAGES.find(l => l.code === language);
-    const langName = selectedLangObj ? selectedLangObj.name : "English";
-    handleUserSpeech(`I just logged my distress level as ${sudsLevel} out of 10. Respond in ${langName} with reassurance-blocking grounding advice.`);
+    handleUserSpeech(`I just logged my distress level as ${sudsLevel} out of 10. Respond with reassurance-blocking grounding advice.`);
   };
 
   // Grounding breathing coach
@@ -330,16 +381,6 @@ export default function App() {
           </div>
           
           <div style={{ width: "100%", textAlign: "left" }}>
-            <label style={{ ...styles.label, display: "block", marginBottom: "0.5rem" }}>CHOOSE SESSION LANGUAGE</label>
-            <select 
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              style={styles.select}
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>{l.label}</option>
-              ))}
-            </select>
           </div>
 
           <p style={{ fontSize: "0.9rem", color: "#94a3b8", lineHeight: 1.6, margin: "0.5rem 0" }}>
@@ -388,18 +429,6 @@ export default function App() {
             </div>
             
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <select 
-                value={language} 
-                onChange={(e) => {
-                  setLanguage(e.target.value);
-                  setTimeout(() => startNewSession(), 100);
-                }}
-                style={styles.miniSelect}
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>{l.name}</option>
-                ))}
-              </select>
               <button onClick={startNewSession} style={styles.restartBtn}>Restart</button>
             </div>
           </div>
